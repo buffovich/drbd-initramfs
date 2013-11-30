@@ -1,0 +1,78 @@
+#!/bin/sh
+# DRBD mounting
+
+PREREQ="mdadm mdrun multipath lvm2"
+
+prereqs()
+{
+	echo "$PREREQ"
+}
+
+case $1 in
+# get pre-requisites
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+activate_drbd()
+{
+	[ -e /proc/drbd ] && return 0
+	modprobe drbd
+	modprobe af_packet
+
+	ip link set dev lo up
+}
+
+activate_volume()
+{
+	local dev="$1"
+
+	# Make sure that we have a non-empty argument
+	if [ -z "$dev" ]; then
+		return 1
+	fi
+
+	# Make sure that we have a drbd path
+        dev="${dev#/dev/drbd}"
+	if [ "$dev" = "$1" ]; then
+		return 1
+	fi
+
+	resource_config=`grep -r -l "/dev/drbd${dev}" /etc/drbd.d`
+	if [ -z "$resource_config" ]; then
+		echo "Can't find resource for /dev/drbd${dev} node"
+		echo "Check your resource configs"
+		return 1;
+	fi
+
+	resource=`expr match "$resource_config" ".*/\([^/]*\).res"`
+
+	if /sbin/drbdadm up "$resource" ; then
+		echo "DRBD resource $resource has been brought up successfully"
+		if /sbin/drbdadm sh-b-pri "$resource" ; then
+			echo "DRBD resource $resource has been tweaked and ready for use"
+		else
+			echo "Something is wrong..."
+			return 1
+		fi
+	else
+		echo "Something is wrong..."
+		return 1
+	fi
+
+	if [ ! -e "/dev/drbd${dev}" ]; then
+		echo "Don't see DRBD device node after DRBD activation: /dev/drbd${dev}"
+		echo "It's really strange"
+	fi
+}
+
+if [ ! -e /sbin/drbdadm ]; then
+	exit 0
+fi
+
+activate_drbd
+activate_volume $ROOT
+
+exit 0;

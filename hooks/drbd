@@ -1,0 +1,27 @@
+#!/bin/sh
+
+PREREQ=""
+
+prereqs()
+{
+       echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+       prereqs
+       exit 0
+       ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+copy_exec /sbin/drbdadm
+copy_exec /sbin/drbdmeta
+copy_exec /sbin/drbdsetup
+
+cp -R /etc/drbd.* "${DESTDIR}/etc/"
+mkdir -p "${DESTDIR}/var/lib/drbd"
+cp -p /var/lib/drbd/node_id "${DESTDIR}/var/lib/drbd/node_id"
+
+exit 0
